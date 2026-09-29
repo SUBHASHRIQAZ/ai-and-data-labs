@@ -1,0 +1,17 @@
+resources:
+  pipelines:
+    ridepulse_lakeflow_pipeline:
+      name: "RidePulse — Lakeflow Declarative Pipeline (comparison)"
+      catalog: ${var.catalog}
+      target: lakeflow_demo
+      serverless: true
+      development: true
+      root_path: ../src/nyc_ridepulse_etl
+      libraries:
+        - file:
+            path: ../src/nyc_ridepulse_etl/transformations/**
+      configuration:
+        source_path: ${var.lakeflow_source_dir}
+        zone_lookup_path: ${var.zone_lookup_path}
+        bundle.sourcePath: ${workspace.file_path}/src
+

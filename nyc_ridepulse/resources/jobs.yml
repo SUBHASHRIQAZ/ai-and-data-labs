@@ -1,0 +1,67 @@
+resources:
+  jobs:
+    ridepulse_batch_etl:
+      name: "RidePulse — Batch ETL (Bronze -> Silver -> Gold -> Data Quality)"
+      tasks:
+        - task_key: bronze_ingestion
+          notebook_task:
+            notebook_path: ../src/nyc_ridepulse/01_bronze_ingestion.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              source_path: ${var.source_path}
+
+        - task_key: silver_transformations
+          depends_on:
+            - task_key: bronze_ingestion
+          notebook_task:
+            notebook_path: ../src/nyc_ridepulse/02_silver_transformations.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              zone_lookup_path: ${var.zone_lookup_path}
+
+        - task_key: gold_aggregations
+          depends_on:
+            - task_key: silver_transformations
+          notebook_task:
+            notebook_path: ../src/nyc_ridepulse/03_gold_aggregations.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+
+        - task_key: data_quality
+          depends_on:
+            - task_key: gold_aggregations
+          notebook_task:
+            notebook_path: ../src/nyc_ridepulse/04_data_quality.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+
+        - task_key: lakeflow_pipeline_refresh
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.ridepulse_lakeflow_pipeline.id}
+      schedule:
+        quartz_cron_expression: "0 0 6 * * ?"
+        timezone_id: "UTC"
+        pause_status: PAUSED
+
+    ridepulse_streaming_demo:
+      name: "RidePulse — Streaming demo (simulate batches -> Auto Loader)"
+      tasks:
+        - task_key: simulate_batches
+          notebook_task:
+            notebook_path: ../src/nyc_ridepulse/06_simulate_batches.ipynb
+            base_parameters:
+              input_path: ${var.source_path}
+              output_dir: ${var.stream_source_path}
+              num_batches: "10"
+              sleep_seconds: "2"
+
+        - task_key: streaming_ingestion
+          depends_on:
+            - task_key: simulate_batches
+          notebook_task:
+            notebook_path: ../src/nyc_ridepulse/05_streaming_ingestion.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              source_path: ${var.stream_source_path}
+              checkpoint_path: ${var.stream_checkpoint_path}
+              trigger_mode: availableNow
