@@ -1,0 +1,53 @@
+# This is a Declarative Automation Bundle definition for nyc_ridepulse.
+# See https://docs.databricks.com/dev-tools/bundles/index.html for documentation.
+bundle:
+  name: nyc_ridepulse
+  uuid: df1a2fd1-ef3a-43fc-9168-bf9d7de6f1b7
+
+include:
+  - resources/*.yml
+  - resources/*/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog name used throughout the pipeline
+    default: ridepulse
+  source_path:
+    description: Path to the downloaded HVFHV parquet file inside the landing Volume
+    default: /Volumes/ridepulse/landing/raw/hvfhv/fhvhv_tripdata_2026-01.parquet
+  lakeflow_source_dir:
+    description: Directory the Lakeflow Pipeline's bronze_trips Auto Loader source
+    default: /Volumes/ridepulse/landing/raw/hvfhv/
+  zone_lookup_path:
+    description: Path to the taxi zone lookup CSV inside the landing Volume
+    default: /Volumes/ridepulse/landing/raw/taxi_zone_lookup.csv
+  stream_source_path:
+    description: Directory Auto Loader watches for simulated batch files
+    default: /Volumes/ridepulse/landing/raw/hvfhv_stream/
+  stream_checkpoint_path:
+    description: Checkpoint location for the Auto Loader stream
+    default: /Volumes/ridepulse/landing/checkpoints/bronze_trips_stream/
+
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: dbc-2a39b143-27d8.cloud.databricks.com
+    permissions:
+      - group_name: admins
+        level: CAN_MANAGE
+    presets:
+      name_prefix: ${workspace.current_user.short_name}
+      source_linked_deployment: false 
+  prod:
+    mode: production
+    workspace:
+      host: dbc-2a39b143-27d8.cloud.databricks.com
+      root_path: /Workspace/PROD/.bundle/${bundle.name}/${bundle.target}
+    permissions:
+      - user_name: subhashridash@gmail.com
+        level: CAN_MANAGE
+      - group_name: admins
+        level: CAN_RUN
