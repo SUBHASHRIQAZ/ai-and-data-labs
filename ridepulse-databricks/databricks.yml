@@ -1,0 +1,54 @@
+# Databricks Asset Bundle definition for RidePulse.
+#
+# This deploys the notebooks under notebooks/ as Databricks Jobs and lets you
+# run the whole pipeline with `databricks bundle deploy` + `databricks bundle
+# run <job>` instead of clicking through the workspace UI. See
+# docs/asset_bundle.md for the full walkthrough.
+#
+# What this does NOT do: fetch the TLC data itself. Free Edition workspaces
+# block outbound internet, so downloading fhvhv_tripdata_*.parquet and
+# uploading it to the landing Volume is still a one-time manual step (see
+# docs/execution_guide.md, Parts 1-3) before you deploy this bundle. The jobs
+# below pick up from "data is already in the Volume" onward.
+
+bundle:
+  name: ridepulse
+
+variables:
+  catalog:
+    description: Unity Catalog catalog name used throughout the pipeline
+    default: ridepulse
+  source_path:
+    description: Path to the downloaded HVFHV parquet file inside the landing Volume
+    default: /Volumes/ridepulse/landing/raw/hvfhv/fhvhv_tripdata_2026-01.parquet
+  lakeflow_source_dir:
+    description: >
+      Directory the Lakeflow Pipeline's bronze_trips Auto Loader source
+      watches (must be a folder, not a file — unlike source_path above,
+      which 01_bronze_ingestion.py reads as one exact file). Defaults to
+      the parent directory of source_path, since that's where the file
+      from the upload step already lives.
+    default: /Volumes/ridepulse/landing/raw/hvfhv/
+  zone_lookup_path:
+    description: Path to the taxi zone lookup CSV inside the landing Volume
+    default: /Volumes/ridepulse/landing/raw/taxi_zone_lookup.csv
+  stream_source_path:
+    description: Directory Auto Loader watches for simulated batch files
+    default: /Volumes/ridepulse/landing/raw/hvfhv_stream/
+  stream_checkpoint_path:
+    description: Checkpoint location for the Auto Loader stream
+    default: /Volumes/ridepulse/landing/checkpoints/bronze_trips_stream/
+
+include:
+  - resources/*.yml
+
+targets:
+  dev:
+    mode: development
+    default: true
+    # Deploys to whatever workspace the Databricks CLI is currently
+    # authenticated against (`databricks auth login`, or your default
+    # profile). Uncomment and set this if you want the bundle to always
+    # target one specific workspace regardless of which profile is active:
+    # workspace:
+    #   host: https://<your-workspace>.cloud.databricks.com

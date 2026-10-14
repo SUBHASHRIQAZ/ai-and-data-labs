@@ -1,0 +1,18 @@
+# OS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.pytest_cache/
+
+# Data / TLC downloads — never commit these
+ridepulse-databricks/data/
+*.parquet
+*.delta/
+checkpoints/
+*.csv
+
+# Databricks
+.databricks/

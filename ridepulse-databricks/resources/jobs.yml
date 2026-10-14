@@ -1,0 +1,105 @@
+# Job resources for the RidePulse bundle. Notebook tasks with no
+# existing_cluster_id / new_cluster / job_cluster_key run on serverless
+# compute, which matches how every notebook in this repo is meant to run
+# (Free Edition has no classic clusters).
+
+resources:
+  jobs:
+    ridepulse_batch_etl:
+      name: "RidePulse — Batch ETL (Bronze -> Silver -> Gold -> Data Quality)"
+      description: >
+        Runs both implementations against the same landing Volume data in one
+        go: the notebook chain (01 -> 02 -> 03 -> 04, gated on data quality)
+        and the Lakeflow Pipeline (resources/pipelines.yml) in parallel, since
+        they write to separate schemas (bronze/silver/gold vs. lakeflow_demo)
+        and neither depends on the other's output. Scheduled — see `schedule:`
+        below — but deployed paused; see docs/asset_bundle.md before unpausing.
+
+        Running both on one schedule is a deliberate choice for keeping a
+        learning comparison current, not a production pattern — in a real
+        system you'd pick one implementation, not pay for two redundant
+        copies of the same data on every run. See docs/asset_bundle.md ->
+        "Automation" for the full reasoning.
+      tasks:
+        - task_key: bronze_ingestion
+          notebook_task:
+            notebook_path: ../notebooks/01_bronze_ingestion.py
+            base_parameters:
+              catalog: ${var.catalog}
+              source_path: ${var.source_path}
+
+        - task_key: silver_transformations
+          depends_on:
+            - task_key: bronze_ingestion
+          notebook_task:
+            notebook_path: ../notebooks/02_silver_transformations.py
+            base_parameters:
+              catalog: ${var.catalog}
+              zone_lookup_path: ${var.zone_lookup_path}
+
+        - task_key: gold_aggregations
+          depends_on:
+            - task_key: silver_transformations
+          notebook_task:
+            notebook_path: ../notebooks/03_gold_aggregations.py
+            base_parameters:
+              catalog: ${var.catalog}
+
+        - task_key: data_quality
+          depends_on:
+            - task_key: gold_aggregations
+          notebook_task:
+            notebook_path: ../notebooks/04_data_quality.py
+            base_parameters:
+              catalog: ${var.catalog}
+
+        # Triggers an update of ridepulse_lakeflow_pipeline (pipelines.yml).
+        # No depends_on: it reads the same landing Volume directly, not the
+        # notebook chain's Bronze table, so it runs concurrently with
+        # bronze_ingestion rather than waiting on it.
+        - task_key: lakeflow_pipeline_refresh
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.ridepulse_lakeflow_pipeline.id}
+
+      # Paused on deploy on purpose — a freshly-deployed bundle shouldn't
+      # silently start running on a schedule you didn't explicitly turn on.
+      # Flip to UNPAUSED (here, or via the Jobs UI) once you've done a
+      # manual `databricks bundle run ridepulse_batch_etl` and confirmed it
+      # works end to end. 6am UTC daily is an arbitrary starting point —
+      # change the cron expression to whatever cadence makes sense once
+      # you're adding new months of TLC data on a real schedule.
+      schedule:
+        quartz_cron_expression: "0 0 6 * * ?"
+        timezone_id: "UTC"
+        pause_status: PAUSED
+
+    ridepulse_streaming_demo:
+      name: "RidePulse — Streaming demo (simulate batches -> Auto Loader)"
+      description: >
+        Runs 06_simulate_batches.py to drop a handful of batch files, then
+        05_streaming_ingestion.py (trigger_mode=availableNow, so the job
+        actually completes) to pick them up with Auto Loader. This validates
+        the streaming path end to end rather than demoing it live — for
+        watching Auto Loader pick up files in real time, run the two
+        notebooks manually side by side instead (docs/execution_guide.md
+        Part 7), with 05 set to trigger_mode=continuous.
+      tasks:
+        - task_key: simulate_batches
+          notebook_task:
+            notebook_path: ../notebooks/06_simulate_batches.py
+            base_parameters:
+              input_path: ${var.source_path}
+              output_dir: ${var.stream_source_path}
+              num_batches: "10"
+              sleep_seconds: "2"
+
+        - task_key: streaming_ingestion
+          depends_on:
+            - task_key: simulate_batches
+          notebook_task:
+            notebook_path: ../notebooks/05_streaming_ingestion.py
+            base_parameters:
+              catalog: ${var.catalog}
+              source_path: ${var.stream_source_path}
+              checkpoint_path: ${var.stream_checkpoint_path}
+              trigger_mode: availableNow
