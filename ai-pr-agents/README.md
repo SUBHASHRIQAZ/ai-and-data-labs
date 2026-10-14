@@ -1,8 +1,8 @@
 # ai-pr-agents
 
-This project uses Claude Code inside GitHub Actions to help with the everyday parts of working on this repo. I write an issue, and Claude writes the code and tests and opens a pull request. Every pull request also gets reviewed and checked automatically before I merge it.
+This project uses Claude Code inside GitHub Actions to help with the everyday parts of working on this repo. You write an issue, and Claude writes the code and tests and opens a pull request. Every pull request also gets reviewed and checked automatically before you merge it.
 
-I put this together after going through the Claude Code docs on [GitHub Actions](https://code.claude.com/docs/en/github-actions), [subagents](https://code.claude.com/docs/en/sub-agents), [slash commands](https://code.claude.com/docs/en/slash-commands) and [skills](https://code.claude.com/docs/en/skills). I wanted the instructions to live in normal Markdown files in the repo, where I can read and change them, instead of one huge prompt hidden inside a YAML file.
+It's built on the Claude Code docs for [GitHub Actions](https://code.claude.com/docs/en/github-actions), [subagents](https://code.claude.com/docs/en/sub-agents), [slash commands](https://code.claude.com/docs/en/slash-commands) and [skills](https://code.claude.com/docs/en/skills). The instructions live in normal Markdown files in the repo, where anyone can read and change them, instead of one huge prompt hidden inside a YAML file.
 
 ## A few terms first
 
@@ -16,14 +16,14 @@ If you're new to GitHub Actions or Claude Code, these are the words used through
 
 ## What happens, step by step
 
-1. I open an issue using the "Agent task" form and write down what I want and how I'll know it's done (the acceptance criteria).
-2. I add the label `claude:implement` to the issue.
+1. Open an issue using the "Agent task" form. Write down what you want and how you'll know it's done (the acceptance criteria).
+2. Add the label `claude:implement` to the issue.
 3. A workflow starts. Claude reads the issue, creates a branch, writes the code and tests, runs the checks and opens a PR linked to the issue.
 4. Opening the PR starts two more workflows. One has Claude review the code and look for security problems, and it leaves its findings as comments. The other runs the normal tools: ruff for formatting and linting, pytest for tests, bandit and pip-audit for security, and gitleaks to catch passwords or keys committed by mistake.
-5. If something needs fixing, I comment on the PR, for example `@claude /fix-review 7`, and Claude pushes a fix.
-6. I read everything and merge it myself. Claude only leaves comments. It never approves a PR.
+5. If something needs fixing, comment on the PR, for example `@claude /fix-review 7`, and Claude pushes a fix.
+6. Read everything and merge the PR yourself. Claude only leaves comments. It never approves a PR.
 
-So I do steps 1, 2 and 6 myself, plus a comment in step 5 when something needs fixing. Everything else runs on its own. Fixes are never pushed automatically after a review, because I want to decide which comments are worth acting on. All of this only works after the one-time setup further down.
+So you do steps 1, 2 and 6 yourself, plus a comment in step 5 when something needs fixing. Everything else runs on its own. Fixes are never pushed automatically after a review, so that a person decides which comments are worth acting on. All of this only works after the one-time setup further down.
 
 ## Where the files are
 
@@ -45,23 +45,23 @@ Everything Claude reads is in `ai-pr-agents/claude/`:
 
 The settings for ruff and bandit are in `ai-pr-agents/config/`.
 
-Claude Code normally expects these files in a folder called `.claude/`. Folders starting with a dot are hidden in most file browsers, so I keep them in `ai-pr-agents/claude/`, where they're easy to find. Each workflow copies them into `.claude/` just before Claude starts.
+Claude Code normally expects these files in a folder called `.claude/`. Folders starting with a dot are hidden in most file browsers, so they're kept in `ai-pr-agents/claude/`, where they're easy to find. Each workflow copies them into `.claude/` just before Claude starts.
 
 ## What the four folders mean
 
-This was the part that took me longest to understand, so here it is in plain terms.
+This is the part that usually takes longest to understand, so here it is in plain terms.
 
 ### instructions
 
-These are the house rules. Claude follows them on every run, whatever the task. There's one small file for each topic: how I write Python, how tests should look, security rules, git and PR conventions, and how to edit Databricks notebooks without breaking them.
+These are the house rules. Claude follows them on every run, whatever the task. There's one small file for each topic: how to write Python in this repo, how tests should look, security rules, git and PR conventions, and how to edit Databricks notebooks without breaking them.
 
-Claude Code automatically reads `CLAUDE.md` when it starts. That file just lists the rule files with lines like `@instructions/03-testing-rules.md`, which pulls each one in ([how imports work](https://code.claude.com/docs/en/memory)). If I want to change a testing rule, I open one short file and edit it.
+Claude Code automatically reads `CLAUDE.md` when it starts. That file just lists the rule files with lines like `@instructions/03-testing-rules.md`, which pulls each one in ([how imports work](https://code.claude.com/docs/en/memory)). To change a testing rule, you open one short file and edit it.
 
 ### commands
 
 A command is a saved prompt with a name. The file `commands/review.md` becomes `/review`. Anything typed after the name is put where the file says `$ARGUMENTS`, so `/review 7` means "review PR 7".
 
-The workflows start Claude by running a command, and I can type the same commands in a GitHub comment. Each command file is only a few lines. It says what to do and which skill to follow. ([Slash commands docs](https://code.claude.com/docs/en/slash-commands))
+The workflows start Claude by running a command, and you can type the same commands in a GitHub comment. Each command file is only a few lines. It says what to do and which skill to follow. ([Slash commands docs](https://code.claude.com/docs/en/slash-commands))
 
 ### skills
 
@@ -86,7 +86,7 @@ A workflow runs a command. The command points to a skill. The skill passes parts
 - `ruff.toml` sets up [ruff](https://docs.astral.sh/ruff/), the tool that formats Python code and points out common mistakes. It sets the line length (100), which groups of rules are switched on (for example unused imports, likely bugs and basic security issues), and a few exceptions. Notebooks are allowed to use `spark` and `dbutils` without importing them, and tests are allowed to use plain `assert`.
 - `bandit.yaml` sets up [bandit](https://bandit.readthedocs.io/), which scans Python code for security mistakes like hard-coded passwords or unsafe shell commands. It tells bandit to skip the `tests` folder and not to complain about `assert`.
 
-Both the `pr-quality-checks.yml` workflow and Claude's `format-check` and `security-check` skills point at these files. That way the code Claude writes is checked against exactly the same rules as the code I write, and if I want stricter linting I only change it in one place.
+Both the `pr-quality-checks.yml` workflow and Claude's `format-check` and `security-check` skills point at these files. That way the code Claude writes is checked against exactly the same rules as code written by hand, and stricter linting only needs changing in one place.
 
 You can use the same files on your own machine:
 
@@ -138,7 +138,7 @@ What each part does:
 - `runs-on: ubuntu-latest` asks GitHub for a fresh Linux machine. It's thrown away when the job finishes.
 - `permissions:` says what the job is allowed to do on GitHub. Claude needs to write code, PRs and issue comments. `id-token: write` lets the action log in as the Claude GitHub App.
 - `actions/checkout@v4` downloads the repo onto the machine so Claude can see the code.
-- `claude-code-action` runs Claude. With no `prompt`, it uses the comment as the request. With a `prompt`, it does exactly what the prompt says. That's how my review workflow runs `/review` on every PR without anyone commenting.
+- `claude-code-action` runs Claude. With no `prompt`, it uses the comment as the request. With a `prompt`, it does exactly what the prompt says. That's how the review workflow here runs `/review` on every PR without anyone commenting.
 
 The workflows in this repo are the same idea with a few more steps: install Python and the check tools, copy `ai-pr-agents/claude/` into `.claude/` so Claude picks up the instructions, then run the action with a prompt and a `claude_args` line. `claude_args` sets the model (`--model`), a limit on how many steps Claude can take (`--max-turns`), and the exact tools it may use (`--allowedTools`).
 
@@ -163,7 +163,7 @@ You only need to do this once. Nothing runs until all of it is done, and each st
 
 6. Merge the workflow files into `main`. GitHub only reacts to labels and comments using the workflow files on the default branch. Until they're on `main`, adding the label or writing `@claude` does nothing. There's no error either, which is confusing the first time.
 
-7. Optional, but I'd recommend it: protect `main` (Settings, then Branches) so a PR needs one approval and the quality checks have to pass before it can be merged.
+7. Optional, but recommended: protect `main` (Settings, then Branches) so a PR needs one approval and the quality checks have to pass before it can be merged.
 
 ### Checking that it worked
 
@@ -211,22 +211,22 @@ Normal sentences work too, like `@claude rename clean_trips to filter_trips`.
 
 Changes to the review instructions only take effect after they're merged into `main` (see the first point in the next section).
 
-## Why I set it up this way
+## Why it's set up this way
 
 - The review jobs take their instructions from `main`, not from the PR being reviewed. Otherwise a PR could edit the reviewer's instructions and make itself look fine.
 - The review jobs can't change code. They're only allowed to read files, look at the PR and post comments.
-- The quality checks only look at files the PR changed. Some older notebooks in this repo don't match the current ruff settings, and I didn't want every new PR to fail because of code it didn't touch.
+- The quality checks only look at files the PR changed. Some older notebooks in this repo don't match the current ruff settings, and a new PR shouldn't fail because of code it didn't touch.
 - Claude treats issue text as a description of the work, not as orders. If an issue asks it to change the workflows, secrets or this folder, it won't. The issue text is also never pasted into a shell command in the workflows.
 - The Claude GitHub App is required, not just optional. A PR created with GitHub's built-in token [doesn't trigger other workflows](https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication), so Claude's own PRs would never get reviewed or checked. The app's token doesn't have that problem.
 - The notebooks are saved in Databricks source format. To a linter, `spark`, `dbutils` and `display` look like undefined names, so `ruff.toml` ignores that error in `notebooks/`. One of the instruction files also tells Claude to keep the `# MAGIC` and `# COMMAND ----------` lines.
 
-## Problems I ran into
+## Problems found along the way
 
-- The security review failed the first time it ran. That PR was the one adding `ai-pr-agents/`, so `main` didn't have the folder yet, and my fallback ended up copying the config folder onto itself. Now the job checks whether `main` has the folder before copying.
+- The security review failed the first time it ran. That PR was the one adding `ai-pr-agents/`, so `main` didn't have the folder yet, and the fallback ended up copying the config folder onto itself. Now the job checks whether `main` has the folder before copying.
 - Before the API key was added, the Claude jobs showed a green tick even though they hadn't done anything, because the action quietly skipped. Now every Claude job checks for the key first and fails with a clear message if it's missing.
-- A plain `run:` step in GitHub Actions uses `bash -e`, while a step with `shell: bash` also turns on `pipefail`. The two behave differently when a command in a pipe fails, so I made sure my file-filtering commands work either way.
+- A plain `run:` step in GitHub Actions uses `bash -e`, while a step with `shell: bash` also turns on `pipefail`. The two behave differently when a command in a pipe fails, so the file-filtering commands are written to work either way.
 
-## Docs I used
+## Docs used
 
 - [Claude Code GitHub Actions](https://code.claude.com/docs/en/github-actions) and the [claude-code-action repo](https://github.com/anthropics/claude-code-action)
 - Claude Code [subagents](https://code.claude.com/docs/en/sub-agents), [slash commands](https://code.claude.com/docs/en/slash-commands), [skills](https://code.claude.com/docs/en/skills) and [memory / CLAUDE.md](https://code.claude.com/docs/en/memory)
