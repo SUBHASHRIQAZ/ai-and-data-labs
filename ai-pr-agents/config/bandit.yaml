@@ -1,0 +1,6 @@
+exclude_dirs:
+  - "tests"
+  - ".venv"
+# B101 (assert_used): allow asserts as quick data sanity checks in notebooks
+skips:
+  - B101

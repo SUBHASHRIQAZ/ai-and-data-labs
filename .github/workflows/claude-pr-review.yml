@@ -1,0 +1,136 @@
+# Claude code review and security review on every non-draft PR.
+#
+# The jobs run the /review and /security-review commands from
+# ai-pr-agents/claude/commands/. Instructions are copied from the base branch rather
+# than the PR, so a PR can't change how it gets reviewed. Neither job can edit files.
+name: Claude · PR review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# A new push cancels a review that's still running.
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  code-review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write   # OIDC, used by the action to get the Claude app token
+    steps:
+      # Without this, claude-code-action skips quietly and the job shows green.
+      - name: Require ANTHROPIC_API_KEY
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::ANTHROPIC_API_KEY secret is not set (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+
+      - name: Check out the PR code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Trusted copy of the instructions, taken from the base commit.
+      - name: Check out trusted instructions from main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: _base
+          sparse-checkout: ai-pr-agents
+
+      - name: Load Claude instructions, commands, skills and agents
+        run: |
+          src=_base/ai-pr-agents/claude
+          [ -d "$src" ] || src=ai-pr-agents/claude   # first PR that adds the folder
+          mkdir -p .claude && cp -r "$src"/. .claude/ && rm -rf _base
+
+      - name: Claude reviews the PR
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          track_progress: true
+          prompt: |
+            REPO: ${{ github.repository }}
+
+            Run the /review command for PR ${{ github.event.pull_request.number }}.
+            Its instructions are in .claude/commands/review.md.
+          # No Edit/Write in the tool list, so the reviewer can't change code.
+          claude_args: |
+            --model claude-sonnet-5
+            --max-turns 40
+            --allowedTools "Read,Glob,Grep,Task,Skill,mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh issue view:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
+
+  security-review:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: Require ANTHROPIC_API_KEY
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::ANTHROPIC_API_KEY secret is not set (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+
+      - name: Check out the PR code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check out trusted instructions from main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: _base
+          sparse-checkout: ai-pr-agents
+
+      # Scanner config also comes from the base commit.
+      - name: Load Claude instructions and scanner config
+        run: |
+          mkdir -p .claude
+          if [ -d _base/ai-pr-agents/claude ]; then
+            cp -r _base/ai-pr-agents/claude/. .claude/
+            rm -rf ai-pr-agents/config && cp -r _base/ai-pr-agents/config ai-pr-agents/config
+          else
+            cp -r ai-pr-agents/claude/. .claude/   # first PR that adds the folder
+          fi
+          rm -rf _base
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install security scanners
+        run: pip install -q bandit pip-audit
+
+      - name: Claude security-reviews the PR
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            REPO: ${{ github.repository }}
+
+            Run the /security-review command for PR ${{ github.event.pull_request.number }}
+            with base branch origin/${{ github.base_ref }}.
+            Its instructions are in .claude/commands/security-review.md.
+          claude_args: |
+            --model claude-sonnet-5
+            --max-turns 40
+            --allowedTools "Read,Glob,Grep,Task,Skill,mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(git diff:*),Bash(git log:*),Bash(bandit:*),Bash(pip-audit:*),Bash(grep:*)"

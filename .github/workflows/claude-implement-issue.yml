@@ -1,0 +1,124 @@
+# Turns a labelled issue into a PR, and handles "@claude ..." comments.
+#
+# implement:   runs when an issue gets the `claude:implement` label. Claude runs the
+#              /implement command (ai-pr-agents/claude/commands/implement.md).
+# interactive: runs when a comment mentions @claude, e.g. "@claude /fix-review 7".
+#
+# Needs the ANTHROPIC_API_KEY secret and the Claude GitHub App. Issue and comment
+# events always use the copy of this file on the default branch.
+name: Claude · implement issue
+
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+# One run per issue/PR at a time; later ones queue.
+concurrency:
+  group: claude-implement-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  implement:
+    if: github.event_name == 'issues' && github.event.label.name == 'claude:implement'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write   # OIDC, used by the action to get the Claude app token
+    steps:
+      # Without this, claude-code-action skips quietly and the job shows green.
+      - name: Require ANTHROPIC_API_KEY
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::ANTHROPIC_API_KEY secret is not set (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+
+      - name: Check out the code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dev tools (ruff, pytest, bandit, pip-audit)
+        run: pip install -q ruff pytest bandit pip-audit
+
+      - name: Load Claude instructions, commands, skills and agents
+        run: mkdir -p .claude && cp -r ai-pr-agents/claude/. .claude/
+
+      - name: Claude implements the issue
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            REPO: ${{ github.repository }}
+
+            Run the /implement command for issue ${{ github.event.issue.number }}.
+            Its instructions are in .claude/commands/implement.md.
+          # --max-turns keeps a confused run from burning through credits.
+          claude_args: |
+            --model claude-sonnet-5
+            --max-turns 80
+            --allowedTools "Read,Edit,Write,Glob,Grep,Task,Skill,Bash(git:*),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh pr create:*),Bash(gh pr view:*),Bash(ruff:*),Bash(pytest:*),Bash(python -m pytest:*),Bash(pip install:*),Bash(bandit:*),Bash(pip-audit:*),Bash(ls:*),Bash(cat:*),Bash(mkdir:*)"
+
+  interactive:
+    if: |
+      (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment')
+      && contains(github.event.comment.body, '@claude')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - name: Require ANTHROPIC_API_KEY
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::ANTHROPIC_API_KEY secret is not set (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+
+      - name: Check out the code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dev tools (ruff, pytest, bandit, pip-audit)
+        run: pip install -q ruff pytest bandit pip-audit
+
+      - name: Load Claude instructions, commands, skills and agents
+        run: |
+          if [ -d ai-pr-agents/claude ]; then mkdir -p .claude && cp -r ai-pr-agents/claude/. .claude/; fi
+
+      # No prompt: in tag mode the action uses the comment itself. The action only
+      # responds to users with write access.
+      - name: Claude answers the @claude comment
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          track_progress: true
+          claude_args: |
+            --model claude-sonnet-5
+            --max-turns 60
+            --allowedTools "Read,Edit,Write,Glob,Grep,Task,Skill,Bash(git:*),Bash(gh issue view:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh api:*),Bash(ruff:*),Bash(pytest:*),Bash(python -m pytest:*),Bash(pip install:*),Bash(bandit:*),Bash(pip-audit:*)"
