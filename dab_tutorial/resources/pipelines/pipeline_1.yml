@@ -1,0 +1,17 @@
+resources:
+  pipelines:
+    pipeline_pipeline_1:
+      name: pipeline_1
+      configuration:
+        spark.sql.ansi.enabled: "true"
+      libraries:
+        - glob:
+            include: ../../src/pipeline_1/transformations/**
+      schema: default
+      continuous: false
+      development: false
+      photon: true
+      channel: CURRENT
+      catalog: workspace
+      serverless: true
+      root_path: ../../src/pipeline_1
