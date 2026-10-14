@@ -1,13 +1,10 @@
-# Git and pull request rules
+# Git and PRs
 
-- The GitHub issue is the definition of done. If something is unclear, make a sensible
-  choice and write it under "Assumptions" in the PR.
-- Branch name: `claude/issue-<number>-<short-description>`
-  (for example `claude/issue-12-drop-negative-fares`).
-- Commit message: short and in the imperative mood, ending with the issue,
-  for example `Drop trips with negative fares (Fixes #12)`.
-- Add files one by one with `git add <file>`. Never `git add -A` or `git add .`.
-- Before opening or updating a PR, always run the format check, the security check and
-  the project's tests, and fix what they report.
-- Fill in every section of the PR template: Summary, Changes, Acceptance criteria,
-  Testing, Checks, Assumptions.
+- The issue's acceptance criteria define done. If something is ambiguous, pick the
+  sensible option and list it under Assumptions in the PR.
+- Branch: `claude/issue-<n>-<short-slug>`, e.g. `claude/issue-12-drop-negative-fares`.
+- Commit messages are short and imperative and reference the issue:
+  `Drop trips with negative fares (Fixes #12)`.
+- Stage files by name. No `git add -A` or `git add .`.
+- Before opening or updating a PR: format check, security check, tests.
+- Fill in every section of `.github/pull_request_template.md`.

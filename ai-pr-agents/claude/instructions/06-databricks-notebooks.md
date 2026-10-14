@@ -1,10 +1,10 @@
 # Databricks notebooks
 
-A `.py` file whose first line is `# Databricks notebook source` is a Databricks
-notebook saved as plain text. When you edit one:
+Files starting with `# Databricks notebook source` are notebooks exported in source
+format. When editing them:
 
-- Keep the first line `# Databricks notebook source` exactly.
-- Keep the `# COMMAND ----------` lines. They separate the cells.
-- Keep the `# MAGIC ` prefix on every line of `%md` and `%sql` cells, including blank
-  lines (`# MAGIC` on its own).
-- `spark`, `dbutils` and `display` are provided by Databricks. Don't import or define them.
+- keep that first line as is
+- keep the `# COMMAND ----------` cell separators
+- keep the `# MAGIC ` prefix on every line of `%md` and `%sql` cells, blank lines
+  included
+- don't import or define `spark`, `dbutils` or `display`; the runtime provides them

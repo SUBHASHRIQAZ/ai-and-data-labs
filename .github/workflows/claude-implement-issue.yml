@@ -1,25 +1,13 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# WHAT THIS DOES
-#   Job "implement":   add the label  claude:implement  to an issue
-#                      → Claude runs the /implement command: writes the code and tests,
-#                        runs the checks, and opens a PR.
-#   Job "interactive": write  @claude ...  in an issue or PR comment
-#                      → Claude does what you asked, for example:
-#                          @claude /fix-review 6
-#                          @claude /check
-#                          @claude rename this function and update the tests
+# Turns a labelled issue into a PR, and handles "@claude ..." comments.
 #
-# WHERE THE INSTRUCTIONS ARE
-#   ai-pr-agents/claude/commands/implement.md  ← what /implement does
-#   ai-pr-agents/claude/commands/              ← other commands (/check, /fix-review, …)
-#   ai-pr-agents/claude/skills/ , agents/ , instructions/
+# implement:   runs when an issue gets the `claude:implement` label. Claude runs the
+#              /implement command (ai-pr-agents/claude/commands/implement.md).
+# interactive: runs when a comment mentions @claude, e.g. "@claude /fix-review 7".
 #
-# NEEDS: the ANTHROPIC_API_KEY repo secret and the Claude GitHub App installed.
-# ─────────────────────────────────────────────────────────────────────────────
+# Needs the ANTHROPIC_API_KEY secret and the Claude GitHub App. Issue and comment
+# events always use the copy of this file on the default branch.
 name: Claude · implement issue
 
-# WHEN to run: a label is added to an issue, or a comment is posted.
-# Each job's "if:" below decides whether it should actually do anything.
 on:
   issues:
     types: [labeled]
@@ -28,40 +16,37 @@ on:
   pull_request_review_comment:
     types: [created]
 
-# Only one Claude run per issue/PR at a time. A new one waits for the current one.
+# One run per issue/PR at a time; later ones queue.
 concurrency:
   group: claude-implement-${{ github.event.issue.number || github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
   implement:
-    # Only when the label that was added is exactly "claude:implement".
     if: github.event_name == 'issues' && github.event.label.name == 'claude:implement'
-    runs-on: ubuntu-latest      # a fresh Linux machine from GitHub
+    runs-on: ubuntu-latest
     timeout-minutes: 45
-    permissions:                # what this job may do on GitHub
-      contents: write           #   push a branch
-      pull-requests: write      #   open the PR
-      issues: write             #   comment on the issue
-      id-token: write           #   log in as the Claude GitHub App
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write   # OIDC, used by the action to get the Claude app token
     steps:
-      # 1. Stop early with a clear message if the API key secret is missing.
+      # Without this, claude-code-action skips quietly and the job shows green.
       - name: Require ANTHROPIC_API_KEY
         env:
           KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           if [ -z "$KEY" ]; then
-            echo "::error::Repository secret ANTHROPIC_API_KEY is not set (Settings → Secrets and variables → Actions)."
+            echo "::error::ANTHROPIC_API_KEY secret is not set (Settings > Secrets and variables > Actions)."
             exit 1
           fi
 
-      # 2. Download the repo onto the machine.
       - name: Check out the code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 3. Install Python and the tools Claude will run.
       - name: Install Python
         uses: actions/setup-python@v5
         with:
@@ -70,11 +55,9 @@ jobs:
       - name: Install dev tools (ruff, pytest, bandit, pip-audit)
         run: pip install -q ruff pytest bandit pip-audit
 
-      # 4. Copy the instructions into .claude/, where Claude Code looks for them.
       - name: Load Claude instructions, commands, skills and agents
         run: mkdir -p .claude && cp -r ai-pr-agents/claude/. .claude/
 
-      # 5. Run Claude Code with the /implement command.
       - name: Claude implements the issue
         uses: anthropics/claude-code-action@v1
         with:
@@ -84,16 +67,13 @@ jobs:
 
             Run the /implement command for issue ${{ github.event.issue.number }}.
             Its instructions are in .claude/commands/implement.md.
-          # --model:        which Claude model to use
-          # --max-turns:    upper limit on steps, which caps cost
-          # --allowedTools: the only tools and shell commands Claude may use
+          # --max-turns keeps a confused run from burning through credits.
           claude_args: |
             --model claude-sonnet-5
             --max-turns 80
             --allowedTools "Read,Edit,Write,Glob,Grep,Task,Skill,Bash(git:*),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh pr create:*),Bash(gh pr view:*),Bash(ruff:*),Bash(pytest:*),Bash(python -m pytest:*),Bash(pip install:*),Bash(bandit:*),Bash(pip-audit:*),Bash(ls:*),Bash(cat:*),Bash(mkdir:*)"
 
   interactive:
-    # Only when the comment mentions @claude.
     if: |
       (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment')
       && contains(github.event.comment.body, '@claude')
@@ -110,7 +90,7 @@ jobs:
           KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           if [ -z "$KEY" ]; then
-            echo "::error::Repository secret ANTHROPIC_API_KEY is not set (Settings → Secrets and variables → Actions)."
+            echo "::error::ANTHROPIC_API_KEY secret is not set (Settings > Secrets and variables > Actions)."
             exit 1
           fi
 
@@ -131,8 +111,8 @@ jobs:
         run: |
           if [ -d ai-pr-agents/claude ]; then mkdir -p .claude && cp -r ai-pr-agents/claude/. .claude/; fi
 
-      # No "prompt" here: Claude reads your @claude comment and does what it asks.
-      # Only people with write access to the repo can trigger this.
+      # No prompt: in tag mode the action uses the comment itself. The action only
+      # responds to users with write access.
       - name: Claude answers the @claude comment
         uses: anthropics/claude-code-action@v1
         with:

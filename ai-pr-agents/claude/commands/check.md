@@ -1,11 +1,11 @@
 ---
-description: Run the format, lint, test and security checks on this branch and fix problems
+description: Run format, lint, test and security checks and fix what fails
 ---
 
-Run all checks on the files changed on this branch and fix what they report:
+On the files changed in this branch:
 
-1. `format-check` skill (ruff format and ruff lint)
-2. The project's tests with pytest
-3. `security-check` skill (bandit, pip-audit, secret scan)
+1. `format-check` skill
+2. the project's pytest suite
+3. `security-check` skill
 
-Finish with a short table: check | result | what you fixed.
+Fix what fails, then list each check with its result and what you changed.

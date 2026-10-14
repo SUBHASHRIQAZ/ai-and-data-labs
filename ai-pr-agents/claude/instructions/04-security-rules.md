@@ -1,12 +1,10 @@
-# Security rules
+# Security
 
-- Never put secrets in code, notebooks or config files (passwords, tokens, API keys,
-  connection strings). Read them from environment variables or Databricks secret scopes.
-- Don't use `eval` or `exec`.
-- Don't use `subprocess` with `shell=True`.
-- Don't build SQL by joining strings with user input. Use parameters.
-- Don't turn off certificate checks (`verify=False`).
-- Don't load untrusted data with `pickle` or `yaml.load` (use `yaml.safe_load`).
-- Don't print or log personal data.
-- If a real secret was ever committed, say so in the PR so the owner can rotate it.
-  Deleting it from the file is not enough.
+- No secrets in code, notebooks or config. Use environment variables or a Databricks
+  secret scope (`dbutils.secrets.get`).
+- No `eval`/`exec`, no `subprocess(..., shell=True)`.
+- No SQL assembled from user input or widget values with f-strings. Use parameters.
+- No `verify=False`. Use `yaml.safe_load`, and don't unpickle anything you didn't write.
+- Don't log or print personal data.
+- If a secret has already been committed, say so in the PR. It needs rotating, not just
+  deleting.

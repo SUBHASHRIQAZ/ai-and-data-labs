@@ -1,14 +1,14 @@
 ---
-description: Check a pull request for security problems and post comments
-argument-hint: <PR number> <base branch, default origin/main>
+description: Security review of a PR
+argument-hint: <PR number> [base branch]
 ---
 
-Do a security review of pull request $ARGUMENTS.
-If a base branch is given, compare against it instead of `origin/main`.
+Security review of PR $ARGUMENTS. Compare against the base branch if one is given,
+otherwise `origin/main`.
 
-Follow the `security-check` skill: run the scanners on the changed files, then have the
-`security-reviewer` agent confirm the results and review the changes by hand.
+Run the `security-check` skill, then have the `security-reviewer` agent go through the
+scanner output and the diff.
 
-Post each confirmed problem as an inline comment, plus one summary comment that starts
-with "## 🔒 Claude security review". If nothing is found, post a one-line summary
-saying so. Do not change any files.
+Post each confirmed issue as an inline comment, and one summary comment headed
+"## Security review". If there's nothing to report, the summary can be one line.
+Don't modify files.

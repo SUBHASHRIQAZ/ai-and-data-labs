@@ -1,251 +1,174 @@
-# AI PR agents: beginner guide
+# ai-pr-agents
 
-This folder makes Claude your **AI teammate on GitHub**:
+A small setup that runs Claude Code inside GitHub Actions to handle the routine parts
+of my workflow on this repo: turning an issue into a first-draft PR, reviewing PRs, and
+running format, test and security checks.
 
-1. You write a GitHub **issue** describing what you want.
-2. You add a label, and Claude **writes the code and tests** and opens a **pull request** (PR).
-3. Every PR, whether you or Claude wrote it, gets an **AI code review**, an
-   **AI security review** and **automatic checks** (formatting, tests, security scanners).
-4. You read the review, ask Claude for fixes if needed, and **you** merge.
+I built it after reading through the Claude Code docs on
+[GitHub Actions](https://code.claude.com/docs/en/github-actions),
+[subagents](https://code.claude.com/docs/en/sub-agents),
+[slash commands](https://code.claude.com/docs/en/slash-commands) and
+[skills](https://code.claude.com/docs/en/skills). I wanted to see how far I could get
+with plain Markdown instructions kept in the repo instead of long prompts buried in YAML.
 
-You don't run anything on your computer. It all runs on GitHub.
+## What it does
 
----
+- **Issue to PR.** Label an issue `claude:implement` and a workflow runs Claude Code
+  with the `/implement` command. It reads the issue, makes a branch, writes the change
+  and tests, runs the checks and opens a PR that links back to the issue.
+- **PR review.** Every non-draft PR gets two Claude jobs. One looks for bugs and
+  missing tests, the other looks for security problems. Both post comments on the PR.
+  Neither can edit code.
+- **Quality checks.** A separate workflow with no AI in it runs ruff, pytest, bandit,
+  pip-audit and gitleaks on the files the PR changed. These are the checks I'd make
+  required before merging.
+- **Follow-ups.** Commenting `@claude ...` on an issue or PR starts another run, for
+  example `@claude /fix-review 7`.
 
-## 1. Words you'll see
+I still review and merge everything myself. The AI review only comments; it never
+approves.
 
-| Word | Meaning |
-|---|---|
-| **Issue** | A task written on GitHub ("Add X", "Fix Y"). |
-| **Pull request (PR)** | A proposed code change you review before merging into `main`. |
-| **GitHub Actions** | GitHub's robot. It runs scripts on its own computers when something happens in your repo. |
-| **Workflow** | One robot script, a `.yml` file in `.github/workflows/`. |
-| **Job / step** | A workflow is made of jobs, and each job is a list of steps run in order. |
-| **Secret** | A password stored safely in GitHub settings, here your Anthropic API key. |
-| **Instructions** | Rules Claude always follows (coding style, testing, security). |
-| **Command** | A shortcut such as `/review 6`, written as a `.md` file. |
-| **Skill** | A step-by-step recipe a command follows, for example "how to implement an issue". |
-| **Agent** | A specialist helper with one job, for example `test-writer`. |
-
-How they fit together:
-
-```
-Workflow (.yml)  ── starts Claude with ──▶  Command (/implement 12)
-                                               │ follows
-                                               ▼
-                                            Skill (implement-issue)
-                                               │ hands work to
-                                               ▼
-                                            Agents (developer, test-writer)
-                                               │ always obey
-                                               ▼
-                                            Instructions (coding, testing, security rules)
-```
-
----
-
-## 2. Where everything is
+## Layout
 
 ```
-ai-and-data-labs/
-│
-├── .github/                         ← GitHub only reads workflows from here
-│   ├── workflows/
-│   │   ├── claude-implement-issue.yml  label an issue → Claude opens a PR; "@claude …" replies
-│   │   ├── claude-pr-review.yml        AI code review + AI security review on every PR
-│   │   └── pr-quality-checks.yml       ruff, pytest, bandit, pip-audit, gitleaks (no AI)
-│   ├── ISSUE_TEMPLATE/agent-task.yml   the form you fill in for a new task
-│   └── pull_request_template.md        the sections every PR description has
-│
-└── ai-pr-agents/
-    ├── README.md                    ← you are here
-    ├── claude/                      ← everything Claude reads
-    │   ├── CLAUDE.md                   main file: Claude reads it first; it includes instructions/
-    │   ├── instructions/               RULES (edit these to change how Claude codes)
-    │   │   ├── 01-project-overview.md
-    │   │   ├── 02-python-coding-rules.md
-    │   │   ├── 03-testing-rules.md
-    │   │   ├── 04-security-rules.md
-    │   │   ├── 05-git-and-pr-rules.md
-    │   │   └── 06-databricks-notebooks.md
-    │   ├── commands/                   COMMANDS (what you or the workflows ask for)
-    │   │   ├── implement.md               /implement <issue>
-    │   │   ├── review.md                  /review <PR>
-    │   │   ├── security-review.md         /security-review <PR>
-    │   │   ├── test.md                    /test
-    │   │   ├── check.md                   /check
-    │   │   └── fix-review.md              /fix-review <PR>
-    │   ├── skills/                     RECIPES the commands follow
-    │   │   ├── implement-issue/SKILL.md
-    │   │   ├── review-pr/SKILL.md
-    │   │   ├── write-tests/SKILL.md
-    │   │   ├── format-check/SKILL.md
-    │   │   └── security-check/SKILL.md
-    │   └── agents/                     SPECIALIST HELPERS
-    │       ├── developer.md               writes the code
-    │       ├── test-writer.md             writes and runs tests
-    │       ├── pr-reviewer.md             finds bugs in a PR
-    │       └── security-reviewer.md       finds security problems
-    └── config/                      ← settings for the check tools
-        ├── ruff.toml                   formatting and lint rules
-        └── bandit.yaml                 security scanner settings
+.github/
+  workflows/
+    claude-implement-issue.yml   issue label and @claude comments
+    claude-pr-review.yml         code review + security review
+    pr-quality-checks.yml        ruff, pytest, bandit, pip-audit, gitleaks
+  ISSUE_TEMPLATE/agent-task.yml
+  pull_request_template.md
+
+ai-pr-agents/
+  claude/
+    CLAUDE.md          entry point, pulls in the files under instructions/
+    instructions/      coding, testing, security, git and notebook rules
+    commands/          /implement, /review, /security-review, /test, /check, /fix-review
+    skills/            the step-by-step procedures the commands follow
+    agents/            developer, test-writer, pr-reviewer, security-reviewer
+  config/
+    ruff.toml
+    bandit.yaml
 ```
 
-**Why `claude/` and not `.claude/`?** Claude Code looks for its files in a folder called
-`.claude/`. Folders that start with a dot are hidden in many file browsers, so the files
-live in the visible `ai-pr-agents/claude/`. Each workflow copies them into `.claude/`
-just before Claude starts.
+Claude Code looks for this material in a `.claude/` directory. I keep it in
+`ai-pr-agents/claude/` so it's visible and grouped with the rest of the project, and
+each workflow copies it into `.claude/` before starting Claude. The workflows have to
+live in the root `.github/workflows/`, because that's the only place GitHub reads them
+from.
 
----
+The layers are deliberately thin. A workflow runs a command, the command names a skill,
+and the skill delegates focused work to agents. Everything follows the rules in
+`instructions/`, which `CLAUDE.md` includes through
+[`@` imports](https://code.claude.com/docs/en/memory). To change one behaviour, I edit
+one small file.
 
-## 3. One-time setup (about 10 minutes)
+## Design decisions
 
-Do these once, in this order.
+**Reviewers load their instructions from `main`, not from the PR.** If the review job
+used the PR's own copy of `ai-pr-agents/`, a PR could quietly weaken its own reviewer.
+The review workflow checks out the base commit into a separate directory and copies the
+instructions and scanner config from there.
 
-**Step 1: Get an Anthropic API key**
-Go to https://console.anthropic.com → *API Keys* → *Create Key*. Copy it.
+**Review jobs are read-only.** Their `--allowedTools` list has no `Edit` or `Write`
+tool, and their shell access is limited to `gh pr view/diff/comment`, `git diff/log`
+and the scanners.
 
-**Step 2: Save it as a GitHub secret**
-In your repo on GitHub: *Settings* → *Secrets and variables* → *Actions* →
-*New repository secret*.
-- Name: `ANTHROPIC_API_KEY`
-- Secret: paste the key
+**Checks only look at changed files.** The repo has older notebooks that don't follow
+the current ruff config. Running the formatter on everything would fail every PR on
+code it didn't touch, so the `changes` job works out the changed `.py` files and the
+project folders with a `tests/` directory, and the later jobs run on just those.
 
-Or from a terminal: `gh secret set ANTHROPIC_API_KEY` (it asks you to paste the key).
+**Issue text is treated as untrusted.** Only people with write access can add labels
+or trigger `@claude`, but the `/implement` command still tells Claude to ignore anything
+in an issue that asks it to touch CI, secrets or this folder. Issue titles and bodies
+are never put into a `run:` step.
 
-**Step 3: Install the Claude GitHub App**
-Open https://github.com/apps/claude → *Install* → choose **Only select repositories**
-→ pick `ai-and-data-labs`. This lets Claude push branches and post comments.
+**The Claude GitHub App token, not `GITHUB_TOKEN`.** A PR opened with the default
+`GITHUB_TOKEN` [doesn't trigger other workflows](https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication),
+so a PR from the implement job would never get reviewed or checked. With the Claude
+GitHub App installed, the action uses the app's token and the downstream workflows run
+normally.
 
-**Step 4: Let workflows create PRs**
-*Settings* → *Actions* → *General* → *Workflow permissions*:
-- choose **Read and write permissions**
-- tick **Allow GitHub Actions to create and approve pull requests**
-- *Save*
+**Databricks notebooks need special handling.** The notebooks here are stored in
+Databricks source format, so `spark`, `dbutils` and `display` look like undefined names
+to a linter. `ruff.toml` ignores `F821` under `notebooks/`, and there's an instruction
+file telling Claude to keep the `# MAGIC` and `# COMMAND ----------` lines intact.
 
-**Step 5: Check the label exists**
-*Issues* → *Labels*. You should see `claude:implement` (it's already been created). If it's
-missing: `gh label create "claude:implement" --color 7057ff`.
+## Setup
 
-**Step 6 (recommended): Protect `main`**
-*Settings* → *Branches* → *Add branch protection rule* for `main`:
-- Require a pull request before merging, with 1 approval
-- Require status checks to pass, and pick the jobs from **PR quality checks**
+1. Create an API key in the [Anthropic Console](https://console.anthropic.com) and add
+   it as the repository secret `ANTHROPIC_API_KEY`
+   (`gh secret set ANTHROPIC_API_KEY`, or Settings > Secrets and variables > Actions).
+2. Install the [Claude GitHub App](https://github.com/apps/claude) on this repository
+   only.
+3. Under Settings > Actions > General > Workflow permissions, select "Read and write
+   permissions" and allow GitHub Actions to create pull requests.
+4. Create the trigger label:
+   `gh label create "claude:implement" --color 7057ff`
+5. Optional: protect `main`, requiring one approval and the jobs from
+   `PR quality checks`.
 
----
+The label and comment triggers only work once the workflows are on the default branch.
+GitHub runs `issues` and `issue_comment` workflows from there, not from feature
+branches.
 
-## 4. Try it: your first run
+## Using it
 
-1. **Open an issue.** *Issues* → *New issue* → **Agent task**. Fill it in, for example:
-   - Project folder: `ridepulse-databricks`
-   - Goal: *Drop trips with a negative fare in the silver layer.*
-   - Acceptance criteria:
-     `- [ ] Rows with fare_amount < 0 are removed`
-     `- [ ] A test covers negative, zero and positive fares`
-2. **Add the label** `claude:implement` to the issue.
-3. **Watch it run:** *Actions* tab → *Claude · implement issue*. It takes a few minutes.
-4. **A PR appears**, linked to your issue. The reviews and checks start on their own.
-5. **Read the review comments** on the PR.
-6. **Ask for changes** by commenting on the PR: `@claude /fix-review 7`
-   (use your PR number).
-7. When everything is ✅ and you're happy, **merge**.
+Open an issue with the *Agent task* template. The acceptance criteria field matters
+most, because each criterion is supposed to end up as at least one test. Then add the
+`claude:implement` label and follow the run under the Actions tab.
 
-Tip: the clearer your acceptance criteria, the better the result. Each one becomes a test.
+Commands you can use in a comment:
 
----
-
-## 5. Things you can type in a comment
-
-Write these in any issue or PR comment. Only people with write access to the repo can
-trigger Claude.
-
-| Comment | What happens |
-|---|---|
-| `@claude /implement 12` | Implements issue #12 and opens a PR (same as adding the label) |
-| `@claude /review 7` | Reviews PR #7 again |
-| `@claude /security-review 7` | Runs the security review on PR #7 again |
-| `@claude /fix-review 7` | Fixes the review comments on PR #7 and pushes |
-| `@claude /test` | Writes missing tests on this PR's branch |
-| `@claude /check` | Runs format, lint, tests and security checks, and fixes problems |
-| `@claude <anything>` | Plain English works too: `@claude rename clean_trips to filter_trips` |
-
----
-
-## 6. What happens during a run
-
-Example: you add `claude:implement` to issue #12.
-
-1. GitHub sees the "label added" event and starts `claude-implement-issue.yml`.
-2. GitHub gives the job a **fresh Linux machine** and runs its steps in order:
-   1. Stop with a clear error if `ANTHROPIC_API_KEY` is missing
-   2. Download your repo
-   3. Install Python, ruff, pytest, bandit, pip-audit
-   4. Copy `ai-pr-agents/claude/` → `.claude/`
-   5. Start Claude Code with the prompt *"Run the /implement command for issue 12"*
-3. Claude reads `CLAUDE.md` and the rules it includes, then opens
-   `commands/implement.md`, which points to the `implement-issue` skill.
-4. Following the skill, Claude runs real terminal commands on that machine:
-   `gh issue view 12`, `git checkout -b …`, then hands the coding to the `developer`
-   agent and the tests to the `test-writer` agent, then runs `ruff`, `pytest`,
-   `bandit`, `git push` and `gh pr create`.
-5. The new PR triggers the review and check workflows the same way.
-
-Claude can only use the tools listed in each workflow's `--allowedTools`. For example,
-the review jobs have no Edit or Write tools, so a reviewer can't change your code.
-
----
-
-## 7. Customising
-
-| I want to… | Edit this |
-|---|---|
-| Change coding style rules | `claude/instructions/02-python-coding-rules.md` |
-| Change testing rules | `claude/instructions/03-testing-rules.md` |
-| Make the reviewer stricter or looser | `claude/agents/pr-reviewer.md` |
-| Change the issue → PR steps | `claude/skills/implement-issue/SKILL.md` |
-| Change lint rules | `config/ruff.toml` |
-| Use a different Claude model | `--model` in the `.yml` files |
-| Limit cost per run | `--max-turns` in the `.yml` files |
-
-**Add a new rule file:** create `claude/instructions/07-my-rules.md`, then add the line
-`@instructions/07-my-rules.md` to `claude/CLAUDE.md`.
-
-**Add a new command:** create `claude/commands/<name>.md`:
-
-```markdown
----
-description: One line saying what it does
-argument-hint: <PR number>
----
-
-Do X for PR #$ARGUMENTS. Follow the `<skill-name>` skill.
+```
+@claude /implement 12          implement issue #12 (same as adding the label)
+@claude /review 7              review PR #7 again
+@claude /security-review 7     security review of PR #7 again
+@claude /fix-review 7          address review comments on PR #7 and push
+@claude /test                  add missing tests on the PR branch
+@claude /check                 run format, lint, tests and security checks, then fix
 ```
 
-Then use it with `@claude /<name> 7`. `$ARGUMENTS` is replaced by whatever you type
-after the command.
+Plain requests work too, for example `@claude rename clean_trips to filter_trips`.
 
-**Add a new agent:** create `claude/agents/<name>.md` with `name`, `description` and
-`tools` at the top (copy an existing agent file as a starting point).
+## Customising
 
-**Note:** the review jobs load their instructions from `main`. A change to them affects
-reviews only after it's merged, so a PR can't rewrite its own reviewer.
+- **Coding, testing or security rules:** edit the relevant file in
+  `claude/instructions/`. To add a new rule file, also add an `@instructions/<file>.md`
+  line to `CLAUDE.md`.
+- **Review focus:** edit `claude/agents/pr-reviewer.md` or `security-reviewer.md`.
+- **New command:** add `claude/commands/<name>.md` with a `description` in the front
+  matter. `$ARGUMENTS` is replaced with whatever follows the command.
+- **Model and cost:** set `--model` and `--max-turns` in each workflow's `claude_args`.
+  Draft PRs skip the Claude review, which helps when pushing lots of small commits.
+- **Lint rules:** edit `config/ruff.toml`.
 
----
+Changes to reviewer instructions only take effect after they're merged into `main`, for
+the reason above.
 
-## 8. Troubleshooting
+## Things I ran into
 
-| What you see | Why | What to do |
-|---|---|---|
-| ❌ *"ANTHROPIC_API_KEY is not set"* | The secret is missing | Setup step 2 |
-| Added the label, nothing happened | Wrong label name, or the workflow isn't on `main` yet | The label must be exactly `claude:implement`; merge this setup first |
-| Claude opened a PR but no reviews or checks ran | Claude GitHub App not installed | Setup step 3 |
-| *"Resource not accessible by integration"* | Actions can't write | Setup step 4 |
-| `format-lint` ❌ | Code isn't formatted | Click *Details*, or comment `@claude /check` |
-| Run stopped with *max turns* | The task was too big for the step limit | Split the issue, or raise `--max-turns` |
+- The first version of the security-review job failed on the PR that introduced it.
+  `main` didn't have `ai-pr-agents/` yet, so the fallback path copied the config
+  directory onto itself and `cp` exited with an error. The job now branches explicitly
+  on whether the base copy exists.
+- Without the API key secret, `claude-code-action` skipped its work and the job showed
+  as passing, which was misleading. Each Claude job now starts by checking for the
+  secret and fails with a clear message if it's missing.
+- In GitHub Actions, a plain `run:` step uses `bash -e` without `pipefail`, but a step
+  that declares `shell: bash` gets `pipefail` too. I wrote the file-filtering pipelines
+  so they behave the same either way.
 
-To see what Claude did, go to the *Actions* tab → click the run → click the job →
-expand **Claude implements the issue** (or the review step).
+## References
 
-**Cost:** the Claude jobs use API credits on each run. The quality checks are free. To
-spend less, use draft PRs while you're working (draft PRs aren't reviewed) and keep
-issues small.
+- [Claude Code GitHub Actions](https://code.claude.com/docs/en/github-actions) and the
+  [claude-code-action repo](https://github.com/anthropics/claude-code-action)
+- Claude Code [subagents](https://code.claude.com/docs/en/sub-agents),
+  [slash commands](https://code.claude.com/docs/en/slash-commands),
+  [skills](https://code.claude.com/docs/en/skills),
+  [memory and CLAUDE.md](https://code.claude.com/docs/en/memory)
+- [GitHub Actions workflow syntax](https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions)
+- [Ruff](https://docs.astral.sh/ruff/), [Bandit](https://bandit.readthedocs.io/),
+  [pip-audit](https://pypi.org/project/pip-audit/),
+  [gitleaks-action](https://github.com/gitleaks/gitleaks-action)

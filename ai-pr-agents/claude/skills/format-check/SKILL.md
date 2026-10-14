@@ -1,12 +1,11 @@
 ---
 name: format-check
-description: Run ruff format and ruff lint on changed Python files and fix issues. Use before committing or when CI's format/lint job fails.
+description: Runs ruff format and ruff check on the changed Python files and fixes the results. Use before committing, or when the format-lint CI job fails.
 ---
 
-# Format and lint check
+# Format and lint
 
-Config: `ai-pr-agents/config/ruff.toml`. Scope: only files changed vs. `main`, so
-legacy code is not reformatted in unrelated PRs.
+Only check files changed against `main`, so unrelated old code isn't reformatted.
 
 ```bash
 pip install -q ruff
@@ -15,12 +14,10 @@ FILES=$(git diff --name-only --diff-filter=ACMR origin/main...HEAD -- '*.py')
 
 ruff format --config ai-pr-agents/config/ruff.toml $FILES
 ruff check  --config ai-pr-agents/config/ruff.toml --fix $FILES
-ruff check  --config ai-pr-agents/config/ruff.toml $FILES   # must exit 0
+ruff check  --config ai-pr-agents/config/ruff.toml $FILES   # should exit 0
 ```
 
-Rules:
-- Fix remaining lint errors by changing the code, not by adding `# noqa`. A `noqa` is
-  acceptable only with a specific rule code and a reason comment.
-- For Databricks notebooks, never let formatting remove `# MAGIC` prefixes or
-  `# COMMAND ----------` separators — check the diff afterwards.
-- Report: files formatted, lint errors fixed, any remaining with reason.
+- Fix lint errors in the code itself. A `# noqa` needs a rule code and a reason.
+- For Databricks notebooks, check the diff afterwards to make sure the `# MAGIC` and
+  `# COMMAND ----------` lines are still there.
+- Report which files were formatted, what was fixed, and anything left with the reason.

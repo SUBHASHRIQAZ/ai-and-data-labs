@@ -1,20 +1,14 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# WHAT THIS DOES
-#   Plain automatic checks on every PR. No AI is involved, and they're free to run.
-#   They only look at files the PR changed, so older code doesn't block new PRs.
+# Standard checks on every PR, no AI involved. Only files changed by the PR are
+# checked, so older code that predates the ruff config doesn't fail new PRs.
 #
-#     changes          → works out which files and projects changed
-#     format-lint      → ruff: is the code formatted, any lint errors?
-#     tests            → pytest for each project the PR touched
-#     bandit           → scans Python code for common security mistakes
-#     dependency-audit → pip-audit: known vulnerabilities in requirements files
-#     secrets-scan     → gitleaks: passwords or keys committed by mistake
+# changes           finds changed .py files, projects with tests/, requirements files
+# format-lint       ruff format --check and ruff check
+# tests             pytest for each changed project
+# bandit            Python security linter (medium severity and up)
+# dependency-audit  pip-audit, only when a requirements file changed
+# secrets-scan      gitleaks over the PR's commits
 #
-#   A red ❌ on the PR means a check failed. Click "Details" to see why.
-#   Tip: make these "required" in Settings → Branches so a PR can't merge while one fails.
-#
-# SETTINGS: ai-pr-agents/config/ruff.toml and ai-pr-agents/config/bandit.yaml
-# ─────────────────────────────────────────────────────────────────────────────
+# Config: ai-pr-agents/config/ruff.toml and bandit.yaml
 name: PR quality checks
 
 on:
@@ -30,7 +24,6 @@ env:
   BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'HEAD~1' }}
 
 jobs:
-  # Finds the changed .py files, the project folders that have tests/, and changed requirements files.
   changes:
     runs-on: ubuntu-latest
     outputs:
@@ -53,7 +46,6 @@ jobs:
           echo "req_files=$reqs" >> "$GITHUB_OUTPUT"
           echo "Python: $py"; echo "Projects with tests: $projects"; echo "Requirements: $reqs"
 
-  # Fix locally with:  ruff format <file>  and  ruff check --fix <file>
   format-lint:
     needs: changes
     if: needs.changes.outputs.py_files != ''
@@ -67,7 +59,6 @@ jobs:
         with:
           args: check --output-format=github --config ${{ env.RUFF_CONFIG }} ${{ needs.changes.outputs.py_files }}
 
-  # Installs each changed project's requirements and runs its tests/ folder.
   tests:
     needs: changes
     if: needs.changes.outputs.projects != ''
@@ -94,7 +85,6 @@ jobs:
           done
           exit $status
 
-  # Reports medium and high severity issues only.
   bandit:
     needs: changes
     if: needs.changes.outputs.py_files != ''
@@ -110,7 +100,6 @@ jobs:
           pip install -q bandit
           bandit -ll -ii -c ai-pr-agents/config/bandit.yaml $PY_FILES
 
-  # Only runs when a requirements*.txt file changed.
   dependency-audit:
     needs: changes
     if: needs.changes.outputs.req_files != ''
@@ -126,7 +115,6 @@ jobs:
           pip install -q pip-audit
           for r in $REQ_FILES; do pip-audit -r "$r" --progress-spinner off; done
 
-  # Always runs, on every commit in the PR.
   secrets-scan:
     runs-on: ubuntu-latest
     steps:

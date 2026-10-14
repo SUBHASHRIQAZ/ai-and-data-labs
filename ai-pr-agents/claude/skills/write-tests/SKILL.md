@@ -1,16 +1,16 @@
 ---
 name: write-tests
-description: Add or extend pytest tests for changed Python code and run them. Use when a change lacks tests, or when asked to write/fix tests for a PR or issue.
+description: Adds or extends pytest tests for the Python code changed on a branch, and runs them. Use when a change is missing tests.
 ---
 
 # Write tests
 
-1. Find what changed: `git diff --name-only origin/main...HEAD -- '*.py'`.
-2. Map each changed source file to its project folder (first path segment) and its
-   test file `<project>/tests/test_<module>.py` (create it if missing).
-3. Delegate to the `test-writer` agent with the list of changed functions and the
-   acceptance criteria (from the issue or PR body).
-4. Run the suite yourself to confirm:
+1. List the changed files: `git diff --name-only origin/main...HEAD -- '*.py'`.
+2. For each one, the project is the first path segment and the tests go in
+   `<project>/tests/test_<module>.py`. Create the file if it doesn't exist.
+3. Give the `test-writer` agent the changed functions and the acceptance criteria from
+   the issue or PR.
+4. Run the tests yourself to confirm:
 
    ```bash
    pip install -q pytest
@@ -18,10 +18,10 @@ description: Add or extend pytest tests for changed Python code and run them. Us
    pytest <project>/tests -q
    ```
 
-5. Report the pytest summary line. Never mark a test `skip`/`xfail` to make the run green
-   without saying why in the PR.
+5. Report the pytest summary line. If anything had to be marked skip or xfail, say why
+   in the PR.
 
-## PySpark test pattern
+PySpark example:
 
 ```python
 def test_clean_trips_drops_negative_fares(spark):
