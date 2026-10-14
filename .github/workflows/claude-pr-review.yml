@@ -21,6 +21,14 @@ jobs:
       issues: read
       id-token: write
     steps:
+      - name: Require ANTHROPIC_API_KEY
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::Repository secret ANTHROPIC_API_KEY is not set (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -63,6 +71,14 @@ jobs:
       pull-requests: write
       id-token: write
     steps:
+      - name: Require ANTHROPIC_API_KEY
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::Repository secret ANTHROPIC_API_KEY is not set (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -75,11 +91,15 @@ jobs:
 
       - name: Load agent instructions
         run: |
-          src=_base/ai-pr-agents
-          [ -d "$src/claude" ] || src=ai-pr-agents
-          mkdir -p .claude && cp -r "$src"/claude/. .claude/
-          # keep trusted scanner config from base too
-          mkdir -p ai-pr-agents/config && cp -r "$src"/config/. ai-pr-agents/config/ && rm -rf _base
+          mkdir -p .claude
+          if [ -d _base/ai-pr-agents/claude ]; then
+            cp -r _base/ai-pr-agents/claude/. .claude/
+            # keep trusted scanner config from base too
+            rm -rf ai-pr-agents/config && cp -r _base/ai-pr-agents/config ai-pr-agents/config
+          else
+            cp -r ai-pr-agents/claude/. .claude/   # first PR that adds the folder
+          fi
+          rm -rf _base
 
       - uses: actions/setup-python@v5
         with:

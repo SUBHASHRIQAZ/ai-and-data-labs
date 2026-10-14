@@ -27,6 +27,14 @@ jobs:
       issues: write
       id-token: write
     steps:
+      - name: Require ANTHROPIC_API_KEY
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::Repository secret ANTHROPIC_API_KEY is not set (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -69,6 +77,14 @@ jobs:
       issues: write
       id-token: write
     steps:
+      - name: Require ANTHROPIC_API_KEY
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::Repository secret ANTHROPIC_API_KEY is not set (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
