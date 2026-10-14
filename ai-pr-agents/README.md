@@ -23,6 +23,8 @@ If you're new to GitHub Actions or Claude Code, these are the words used through
 5. If something needs fixing, I comment on the PR, for example `@claude /fix-review 7`, and Claude pushes a fix.
 6. I read everything and merge it myself. Claude only leaves comments. It never approves a PR.
 
+So I do steps 1, 2 and 6 myself, plus a comment in step 5 when something needs fixing. Everything else runs on its own. Fixes are never pushed automatically after a review, because I want to decide which comments are worth acting on. All of this only works after the one-time setup further down.
+
 ## Where the files are
 
 The workflows are in `.github/workflows/` at the root of the repo, because that's the only place GitHub looks for them:
@@ -144,16 +146,36 @@ The quickest way to get the app, the secret and a starter workflow in one go is 
 
 ## Setting it up
 
-You only need to do this once.
+You only need to do this once. Nothing runs until all of it is done, and each step mentions what goes wrong if you skip it.
 
-1. Get an API key from the [Anthropic Console](https://console.anthropic.com).
-2. In the GitHub repo, go to Settings, then Secrets and variables, then Actions. Add a new repository secret called `ANTHROPIC_API_KEY` and paste the key. (From a terminal, `gh secret set ANTHROPIC_API_KEY` does the same thing.)
-3. Install the [Claude GitHub App](https://github.com/apps/claude) and give it access to this repository only.
-4. Go to Settings, then Actions, then General. Under "Workflow permissions", pick "Read and write permissions" and tick "Allow GitHub Actions to create and approve pull requests".
-5. Create the label `claude:implement` (Issues, then Labels, then New label), or run `gh label create "claude:implement" --color 7057ff`.
-6. Optional, but I'd recommend it: protect the `main` branch so a PR needs one approval and the quality checks have to pass before it can be merged.
+1. Get an API key from the [Anthropic Console](https://console.anthropic.com). It's what Claude uses to run, and each run uses a little of your API credit.
 
-The label and the `@claude` comments only start working once these workflow files are on `main`. GitHub always uses the version on the default branch for issue and comment events.
+2. Save the key as a secret. In the GitHub repo, go to Settings, then Secrets and variables, then Actions, and click "New repository secret". Name it `ANTHROPIC_API_KEY` and paste the key. (From a terminal, `gh secret set ANTHROPIC_API_KEY` does the same.)
+   If you skip this, every Claude job fails straight away with "ANTHROPIC_API_KEY secret is not set".
+
+3. Install the [Claude GitHub App](https://github.com/apps/claude) and give it access to this repository only. This is what lets Claude push branches, open PRs and post comments.
+   If you skip this, Claude can't act on the repo. The PRs it opens also won't start the review and checks, because PRs made with GitHub's built-in token don't trigger other workflows.
+
+4. Go to Settings, then Actions, then General. Under "Workflow permissions", choose "Read and write permissions", tick "Allow GitHub Actions to create and approve pull requests", and save.
+   If you skip this, runs fail with "Resource not accessible by integration" when they try to push or open a PR.
+
+5. Create the label `claude:implement`. Go to Issues, then Labels, then New label, or run `gh label create "claude:implement" --color 7057ff`. It's the switch that starts Claude on an issue.
+
+6. Merge the workflow files into `main`. GitHub only reacts to labels and comments using the workflow files on the default branch. Until they're on `main`, adding the label or writing `@claude` does nothing. There's no error either, which is confusing the first time.
+
+7. Optional, but I'd recommend it: protect `main` (Settings, then Branches) so a PR needs one approval and the quality checks have to pass before it can be merged.
+
+### Checking that it worked
+
+Open any small PR, or push a commit to an open one. Then open the Actions tab. You should see "Claude · PR review" and "PR quality checks" running, and after a few minutes Claude's review comments should appear on the PR. If a job has a red cross, click it and open the failed step to read the error.
+
+### If nothing happens
+
+- You added the label but no run appears in the Actions tab. Check that the workflow files are on `main` (step 6) and that the label is spelled exactly `claude:implement`.
+- A Claude job fails saying the secret isn't set. Redo step 2. The name has to match exactly, in capital letters.
+- The run fails with "Resource not accessible by integration". Redo step 4.
+- Claude opened a PR, but no review or checks started on it. The GitHub App isn't installed or can't see this repo (step 3).
+- A run stops with a message about max turns. The task was too big for one run. Split the issue into smaller ones, or raise `--max-turns` in the workflow file.
 
 ## Trying it out
 
