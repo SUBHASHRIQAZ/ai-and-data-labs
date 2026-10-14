@@ -1,0 +1,40 @@
+# Lakeflow Declarative Pipeline resource — a comparison implementation
+# alongside the Job in jobs.yml, not a replacement. See
+# pipelines/lakeflow_etl.py for what it does and why it's structured the
+# way it is.
+#
+# I'm less confident about this file than resources/jobs.yml. Pipeline
+# resources are a newer, faster-moving part of the bundle schema, and I
+# haven't been able to check this against a real workspace or a current
+# `databricks bundle schema` dump. `target` may need to be `schema` in your
+# CLI version, and the `file:` library type may need to be `notebook:`
+# depending on how your workspace resolves plain .py pipeline source files.
+# Run `databricks bundle validate` before relying on this, and check
+# `databricks bundle schema` if it doesn't validate as-is.
+#
+# The pipeline source (pipelines/lakeflow_etl.py) uses the `pyspark.pipelines`
+# API rather than the older `import dlt` module — needs a recent enough
+# Databricks Runtime for that to be available. If your workspace errors on
+# `from pyspark import pipelines as dp`, see the fallback noted in that
+# file's docstring (swap to `import dlt`, same decorator arguments).
+
+resources:
+  pipelines:
+    ridepulse_lakeflow_pipeline:
+      name: "RidePulse — Lakeflow Declarative Pipeline (comparison)"
+      catalog: ${var.catalog}
+      target: lakeflow_demo
+      serverless: true
+      development: true
+      libraries:
+        - file:
+            path: ../pipelines/lakeflow_etl.py
+      configuration:
+        # Must be a directory, not a file — bronze_trips() in lakeflow_etl.py
+        # uses Auto Loader (cloudFiles), which watches/lists a folder. This
+        # is deliberately NOT var.source_path (that's the exact parquet
+        # file 01_bronze_ingestion.py batch-reads) — pointing Auto Loader
+        # at a single file instead of its parent directory is why
+        # bronze_trips fails to resolve on first run.
+        source_path: ${var.lakeflow_source_dir}
+        zone_lookup_path: ${var.zone_lookup_path}
