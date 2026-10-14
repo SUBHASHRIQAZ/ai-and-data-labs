@@ -57,11 +57,43 @@ each workflow copies it into `.claude/` before starting Claude. The workflows ha
 live in the root `.github/workflows/`, because that's the only place GitHub reads them
 from.
 
-The layers are deliberately thin. A workflow runs a command, the command names a skill,
-and the skill delegates focused work to agents. Everything follows the rules in
-`instructions/`, which `CLAUDE.md` includes through
-[`@` imports](https://code.claude.com/docs/en/memory). To change one behaviour, I edit
-one small file.
+### What each folder is for
+
+**`instructions/`: the rules.** These are standing rules Claude follows on every run,
+whatever it's working on: how I write Python, what a good test looks like, what counts
+as a security problem, branch and commit conventions, and how to edit Databricks
+notebooks without breaking them. `CLAUDE.md` is the file Claude Code loads
+automatically at startup, and it pulls each rule file in with an
+[`@` import](https://code.claude.com/docs/en/memory). Splitting them up means a change
+to the testing rules touches one short file instead of one long prompt.
+
+**`commands/`: the entry points.** A command is a reusable prompt that gets a name.
+`commands/review.md` becomes `/review`, and whatever follows the name (a PR number,
+say) is substituted wherever the file says `$ARGUMENTS`. The workflows start Claude by
+running a command, and I can run the same commands myself in a `@claude` comment. They
+stay short on purpose: they say what to do and which skill to follow, and nothing more.
+See [slash commands](https://code.claude.com/docs/en/slash-commands).
+
+**`skills/`: the procedures.** A skill is a step-by-step recipe for one kind of task,
+like "implement an issue": read it, branch, write the code, test, check, commit, open a
+PR. Each lives in its own folder as `SKILL.md`, with a `description` at the top that
+tells Claude when it applies. Keeping the procedure here, rather than in the command,
+lets several commands reuse it. `/check`, for example, uses the same `format-check`
+and `security-check` skills as `/implement`.
+See [skills](https://code.claude.com/docs/en/skills).
+
+**`agents/`: the specialists.** An agent (subagent) is a helper with a single job, its
+own instructions and its own list of allowed tools. When a skill hands work to
+`test-writer`, that agent starts with a clean context focused only on testing, and
+sends back a summary instead of filling the main conversation with every file it read.
+The tool lists also act as guardrails: `pr-reviewer` and `security-reviewer` can read
+code but have no tool to edit it.
+See [subagents](https://code.claude.com/docs/en/sub-agents).
+
+Put together, a run goes: the workflow starts a **command**, the command follows a
+**skill**, the skill hands focused pieces to **agents**, and all of them follow the
+**instructions**. Each layer is thin, so changing one behaviour means editing one
+small file.
 
 ## Design decisions
 
