@@ -77,6 +77,71 @@ When a skill hands work to `test-writer`, that agent starts fresh and only think
 
 A workflow runs a command. The command points to a skill. The skill passes parts of the work to agents. All of them follow the instructions.
 
+## The config folder
+
+`ai-pr-agents/config/` isn't for Claude. It holds the settings for two of the checking tools, so that every check follows the same rules.
+
+- `ruff.toml` sets up [ruff](https://docs.astral.sh/ruff/), the tool that formats Python code and points out common mistakes. It sets the line length (100), which groups of rules are switched on (for example unused imports, likely bugs and basic security issues), and a few exceptions. Notebooks are allowed to use `spark` and `dbutils` without importing them, and tests are allowed to use plain `assert`.
+- `bandit.yaml` sets up [bandit](https://bandit.readthedocs.io/), which scans Python code for security mistakes like hard-coded passwords or unsafe shell commands. It tells bandit to skip the `tests` folder and not to complain about `assert`.
+
+Both the `pr-quality-checks.yml` workflow and Claude's `format-check` and `security-check` skills point at these files. That way the code Claude writes is checked against exactly the same rules as the code I write, and if I want stricter linting I only change it in one place.
+
+You can use the same files on your own machine:
+
+```
+pip install ruff bandit
+ruff format --config ai-pr-agents/config/ruff.toml path/to/file.py
+ruff check --config ai-pr-agents/config/ruff.toml path/to/file.py
+bandit -c ai-pr-agents/config/bandit.yaml path/to/file.py
+```
+
+## How Claude is connected to GitHub Actions
+
+If you've never done this before, here's what's actually going on. There are four pieces.
+
+1. The workflow file. A `.yml` file in `.github/workflows/` tells GitHub when to run something (for example "when someone comments on an issue") and what steps to run.
+2. The action. One of those steps is `anthropics/claude-code-action@v1`. This is Anthropic's official action. It installs Claude Code on GitHub's machine and runs it with the prompt you give it.
+3. The API key. Claude needs an Anthropic API key to work. You store it as a repository secret, and the workflow passes it to the action as `${{ secrets.ANTHROPIC_API_KEY }}`. The key never appears in the code or in the logs.
+4. The Claude GitHub App. This gives Claude permission to act on your repo: push branches, open PRs and post comments.
+
+Here's the smallest working example. Save it as `.github/workflows/claude.yml` in any repo, and Claude will reply whenever someone writes `@claude` in an issue or PR comment.
+
+```yaml
+name: Claude
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  claude:
+    if: contains(github.event.comment.body, '@claude')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+What each part does:
+
+- `on:` is the trigger. Here it's "a new comment was posted".
+- `if:` makes the job run only when the comment mentions `@claude`, so ordinary comments are ignored.
+- `runs-on: ubuntu-latest` asks GitHub for a fresh Linux machine. It's thrown away when the job finishes.
+- `permissions:` says what the job is allowed to do on GitHub. Claude needs to write code, PRs and issue comments. `id-token: write` lets the action log in as the Claude GitHub App.
+- `actions/checkout@v4` downloads the repo onto the machine so Claude can see the code.
+- `claude-code-action` runs Claude. With no `prompt`, it uses the comment as the request. With a `prompt`, it does exactly what the prompt says. That's how my review workflow runs `/review` on every PR without anyone commenting.
+
+The workflows in this repo are the same idea with a few more steps: install Python and the check tools, copy `ai-pr-agents/claude/` into `.claude/` so Claude picks up the instructions, then run the action with a prompt and a `claude_args` line. `claude_args` sets the model (`--model`), a limit on how many steps Claude can take (`--max-turns`), and the exact tools it may use (`--allowedTools`).
+
+The quickest way to get the app, the secret and a starter workflow in one go is to open Claude Code in a terminal inside your repo and run `/install-github-app`. It walks you through each step. The setup below does the same thing by hand.
+
 ## Setting it up
 
 You only need to do this once.
