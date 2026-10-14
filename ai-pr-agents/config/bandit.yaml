@@ -1,0 +1,6 @@
+exclude_dirs:
+  - "tests"
+  - ".venv"
+# B101: assert_used — fine outside tests too for internal invariants in notebooks
+skips:
+  - B101

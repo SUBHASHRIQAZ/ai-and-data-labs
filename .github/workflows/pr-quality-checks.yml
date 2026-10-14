@@ -1,0 +1,117 @@
+# Deterministic gates on every PR — no AI involved. Make these required status checks
+# in branch protection. Scoped to changed files/projects so legacy code doesn't block PRs.
+name: PR quality checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  RUFF_CONFIG: ai-pr-agents/config/ruff.toml
+  BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'HEAD~1' }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      py_files: ${{ steps.diff.outputs.py_files }}
+      projects: ${{ steps.diff.outputs.projects }}
+      req_files: ${{ steps.diff.outputs.req_files }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        run: |
+          changed=$(git diff --name-only --diff-filter=ACMR "$BASE_REF"...HEAD)
+          py=$(echo "$changed" | grep -E '\.py$' | tr '\n' ' ' || true)
+          projects=$(echo "$changed" | cut -d/ -f1 | sort -u \
+            | while read -r d; do [ -d "$d/tests" ] && echo "$d"; done | tr '\n' ' ' || true)
+          reqs=$(echo "$changed" | grep -E 'requirements.*\.txt$' | tr '\n' ' ' || true)
+          echo "py_files=$py"    >> "$GITHUB_OUTPUT"
+          echo "projects=$projects" >> "$GITHUB_OUTPUT"
+          echo "req_files=$reqs" >> "$GITHUB_OUTPUT"
+          echo "Python: $py"; echo "Projects with tests: $projects"; echo "Requirements: $reqs"
+
+  format-lint:
+    needs: changes
+    if: needs.changes.outputs.py_files != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: format --check --diff --config ${{ env.RUFF_CONFIG }} ${{ needs.changes.outputs.py_files }}
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: check --output-format=github --config ${{ env.RUFF_CONFIG }} ${{ needs.changes.outputs.py_files }}
+
+  tests:
+    needs: changes
+    if: needs.changes.outputs.projects != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Run pytest per changed project
+        env:
+          PROJECTS: ${{ needs.changes.outputs.projects }}
+        run: |
+          pip install -q pytest
+          status=0
+          for p in $PROJECTS; do
+            echo "::group::$p"
+            for r in "$p/requirements.txt" "$p/tests/requirements.txt"; do
+              [ -f "$r" ] && pip install -q -r "$r"
+            done
+            pytest "$p/tests" -q --import-mode=importlib || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+
+  bandit:
+    needs: changes
+    if: needs.changes.outputs.py_files != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - env:
+          PY_FILES: ${{ needs.changes.outputs.py_files }}
+        run: |
+          pip install -q bandit
+          bandit -ll -ii -c ai-pr-agents/config/bandit.yaml $PY_FILES
+
+  dependency-audit:
+    needs: changes
+    if: needs.changes.outputs.req_files != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - env:
+          REQ_FILES: ${{ needs.changes.outputs.req_files }}
+        run: |
+          pip install -q pip-audit
+          for r in $REQ_FILES; do pip-audit -r "$r" --progress-spinner off; done
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,26 @@
+target-version = "py311"
+line-length = 100
+extend-exclude = ["*.ipynb"]
+
+[lint]
+select = [
+  "E", "W",   # pycodestyle
+  "F",        # pyflakes
+  "I",        # isort
+  "B",        # bugbear
+  "UP",       # pyupgrade
+  "SIM",      # simplify
+  "S",        # bandit-style security rules
+  "PT",       # pytest style
+]
+ignore = [
+  "E501",  # line length is the formatter's job
+  "S311",  # `random` is fine for data simulators; not used for crypto
+]
+
+[lint.per-file-ignores]
+# Databricks notebooks: spark/dbutils/display are runtime globals; cells re-import freely
+"**/notebooks/**/*.py" = ["F821", "E402", "F811"]
+"**/pipelines/**/*.py" = ["F821"]
+# Tests use bare asserts
+"**/tests/**/*.py" = ["S101"]
